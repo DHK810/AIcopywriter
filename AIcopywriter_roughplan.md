@@ -69,5 +69,9 @@
 
 아웃풋 활용: 사람이 괜찮은 문구를 골라서 살짝의 수정을 거친 후 마무리. 
 
+제품군: skirt, pants, jewelry, accesssary, boots, dress, sweater, blazer
+
+copy 분류: 1= Conversion Rate에 관련된 문구, 0 = 제품 설명 문구
+
 
 
