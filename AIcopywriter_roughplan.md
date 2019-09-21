@@ -24,19 +24,9 @@
 
 이미지에서 텍스트
 
-<<<<<<< HEAD
-- google vision api(img to text, text to DB)
-
-  
-
-=======
-- tesseract 
-  - https://niceman.tistory.com/155
-  - [https://junyoung-jamong.github.io/computer/vision,/ocr/2019/01/30/Python%EC%97%90%EC%84%9C-Tesseract%EB%A5%BC-%EC%9D%B4%EC%9A%A9%ED%95%B4-OCR-%EC%88%98%ED%96%89%ED%95%98%EA%B8%B0.html](https://junyoung-jamong.github.io/computer/vision,/ocr/2019/01/30/Python에서-Tesseract를-이용해-OCR-수행하기.html)
-  
 - google.vision api
 
->>>>>>> fe325bceb9674a8c35aab6894bfce3690c5ea1f0
+
 
 해야할 것
 
@@ -44,12 +34,6 @@
 2. 광고 카피 이미지에서 텍스트 추출
 3. 새로운 문장 만들어보기(데이터베이스에 없는 문장이어야함)
 4. 이후에 매력적인 문구가 무엇인지 정의하고 그에 맞는 알고리즘 개발.
-
-
-
-PERSADO 데이터셋
-
-- Persado’s “message machine” builds copy from a database of more than 1 million words tagged and scored for emotional appeal.
 
 
 
