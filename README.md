@@ -1,35 +1,39 @@
 # AI copywriter
 
-- 아이디어 creating과정에서 가장 어려운게 맨 처음이다. 
-- 이 과정을 줄이고 마지막 수정 작업만 할 수 있도록 도와주기 위한 AI copywriter
-
-책, 안경, 지갑, 약, 음료, 담배 뭐가 되었던 입력값은 산업 분야와 제품군이다. 
-
-기존 포스터, 카피로 학습된 모델로 새로운 문장을 만들어 낸다.
-
-포스터, 카피는 대부분 이미지로 있기 때문에 이미지 읽는 패키지 필요.
-
-지금의 목표는 하나의 산업 또는 하나의 제품 디스플레이 광고에 들어가는 카피 추천해주는 AI만들기.
-
-![1569026220143](C:\Users\15Z970-GA5BK\AppData\Roaming\Typora\typora-user-images\1569026220143.png)
+- 아이디어 발상하는 과정에서 가장 어려운게 시작이다. 
+- 이 과정을 줄이고 마지막 수정 작업만 할 수 있도록 도와주기 위한 AI copywriter, zeto50
+- 자동차의 파워를 말할 때 나오는 단어는 '제로백'. 시속 100킬로미터를 몇초 안에 달성하는지를 측정한다. 아이디어를 만들어내는 과정은 아무리 베테랑이어도 시간이 걸리기 마련이다. 누구나 짧은 시간안에 제로백을 달성하고 싶지 않은가? 시작이 반이라는 격언처럼 일단 시작할 만한 아이디어가 있으면 가지를 붙이거나 쳐내며 다듬어 갈 수 있다. 그 초반의 괴로운 과정을 없애주겠다. zero to 50, zeto50. 50의 노력으로 100의 결과물을 만들어내도록 도와주겠다.
 
 
 
-### 광고카피 올라오는 사이트:
+#### 데이터 크롤링 사이트:
 
-1. https://www.adsoftheworld.com/?terms=&medium=484&industry=22&country=473
-2. http://creativecriminals.com/archive/country:usa/category:print 프린트 광고 많음
-3. http://www.welovead.com/en/ 이미지 15만개 있음
+- imdb
 
 
 
-### 이미지에서 텍스트:
+#### 해야할 것
+
+- 영화제목, 포스터, 태그라인, 영화요약, 영화시놉시스, 영화장르 크롤링
+- DB 연동
+- 새로운 tagline 만들어낼 알고리즘 구현
+
+
+
+#### 목표 데이터셋:
+
+- movie_name, movie_poster_url, movie_summary, movie_synopsis, movie_genre
+- 이후에 추가할 데이터셋: 위치데이터(tagline_x, tagline_y, movie_name_x, movie_name_y)
+
+
+
+#### 이미지에서 텍스트:
 
 - google.vision api
 
 
 
-### 해야할 것:
+#### 해야할 것:
 
 1. 광고 카피 이미지 크롤링
 2. 광고 카피 이미지에서 텍스트 추출
@@ -38,40 +42,64 @@
 
 
 
-### 우리의 지금 목표 데이터셋:
+#### 우리의 지금 목표 데이터셋:
 
 - product_category, copy
 
-### 이후의 데이터셋:
+#### 이후의 데이터셋:
 
 - industry, product_category, copy, strategy
 
 
 
-### 이후 확장 가능:
 
-- 만들어진 문장이 무슨 목적으로, 무슨 효과를 기대하고 만들어졌는지 설명
+#### ai copywriter 현재(20190925)목표:
 
-- 접근방법을 입력값을 받음.(humor, informative, descriptive, emotional)
+- 크롤링 
+- DB 연동
 
-- 데이터형식: industry, product_category, copy, strategy
+- 예상 아웃풋: AI 추천 태그라인 10가지
 
-- PERSADO는 문구를 Emotional/ Descriptive/ Formatting/ Functional/ Positioning으로 나누어 만든다.  나는 감정을 자극할 수 있는 emotional 문구, 설명의 Descriptive 문구까지 만들고 싶다. 
+- 아웃풋 활용: 사람이 괜찮은 문구를 골라서 살짝의 수정을 거친 후 마무리. 
+
+- 영화 장르: ['comedy', 'sci-fi', 'horror', 'romance', 'action', 'thriller', 'drama', 'mystery', 'crime', 'animation', 'adventure', 'fantasy', 'comedy-romance', 'action-comedy', 'superhero']
 
 
 
 
-### ai copywriter 현재(20190921)목표:
 
-타겟 플랫폼: 온라인 쇼핑몰
+#### 이후 확장 가능:
 
-예상 아웃풋: AI 추천 문장 10가지 정도.
+- 온라인 display 광고 카피
+- text to image로 포스터 제작
+- 제목과 태그라인 위치 추천
+- 맞춤형 문구 추천
 
-아웃풋 활용: 사람이 괜찮은 문구를 골라서 살짝의 수정을 거친 후 마무리. 
+#### 광고 올라오는 사이트:
 
-제품군: skirt, pants, jewelry, accesssary, boots, dress, sweater, blazer
+1. https://www.adsoftheworld.com/?terms=&medium=484&industry=22&country=473
+2. http://creativecriminals.com/archive/country:usa/category:print 프린트 광고 많음
+3. http://www.welovead.com/en/ 이미지 15만개 있음
 
-copy 분류: 1= Conversion Rate에 관련된 문구, 0 = 제품 설명 문구
 
+
+#### 0921_간략한 멘토링 추가 내용
+
+여러개의 광고를 추천해주는 방식.
+
+여러가지 방법을 실행 (여러 버전)
+
+
+
+if 영화포스터 추천
+  * 도메인을 줄여서 (영화 포스터의 문구) -> 관객수에 따른 영화 흥행
+
+  몇가지 추출해서 사람들 선택에 따른 가중치
+
+  **포스터 선택 
+
+  영화 주연, 주제, 포스터들의 정보를 토대로 변화를 어떻게 주냐
+
+  포스터를 어떻게 보여줄거냐 ( 문구들을 어떻게 줄거냐 )
 
 
