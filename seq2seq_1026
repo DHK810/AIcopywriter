@@ -1,0 +1,919 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "3nIPVzDyOpo5"
+   },
+   "source": [
+    "# Lab 12-5 sequence to sequence (Keras + eager version)\n",
+    "\n",
+    "### simple neural machine translation training\n",
+    "\n",
+    "* sequence to sequence\n",
+    "  \n",
+    "### Reference\n",
+    "* [Sequence to Sequence Learning with Neural Networks](https://arxiv.org/abs/1409.3215)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 848
+    },
+    "colab_type": "code",
+    "id": "S5CeBT9vH2Vu",
+    "outputId": "923ad2c1-d877-4f66-9bcf-1de73b253f9f"
+   },
+   "outputs": [],
+   "source": [
+    "pip install tensorflow==1.15"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 34
+    },
+    "colab_type": "code",
+    "id": "tnxXKDjq3jEL",
+    "outputId": "b0f5a251-d644-4ff8-e4a7-16651f19c51e"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "1.15.0\n"
+     ]
+    }
+   ],
+   "source": [
+    "from __future__ import absolute_import, division, print_function\n",
+    "\n",
+    "# Import TensorFlow >= 1.10 and enable eager execution\n",
+    "import tensorflow as tf\n",
+    "print(tf.__version__)\n",
+    "tf.enable_eager_execution()\n",
+    "\n",
+    "from matplotlib import font_manager, rc\n",
+    "\n",
+    "rc('font', family='AppleGothic') #for mac\n",
+    "\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from tensorflow import keras\n",
+    "from tensorflow.keras.preprocessing.sequence import pad_sequences\n",
+    "\n",
+    "from pprint import pprint\n",
+    "import numpy as np\n",
+    "import os\n",
+    "import pandas as pd\n",
+    "import re\n",
+    "#요약\n",
+    "from gensim.summarization.summarizer import summarize\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "/Users/Jay/Documents/Dev/git_clone/simple-keras-rest-api/moviedata2.json\n"
+     ]
+    }
+   ],
+   "source": [
+    "BASE_DIR = os.getcwd()\n",
+    "FILE_PATH = os.path.join(BASE_DIR, u\"moviedata2.json\")\n",
+    "print(FILE_PATH)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 183,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "KE6QOHpjWKfi"
+   },
+   "outputs": [],
+   "source": [
+    "\n",
+    "#path = '/content/drive/My Drive/Colab Notebooks/moviedata2.json'\n",
+    "df = pd.read_json('moviedata2.json')[:10000]\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 184,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "10000"
+      ]
+     },
+     "execution_count": 184,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "len(df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 185,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.drop(df.index[-584:], inplace = True)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 전처리"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 186,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "HX9oPOxYWIq3"
+   },
+   "outputs": [],
+   "source": [
+    "#df = movie_dataframe\n",
+    "def preprocessing(df):\n",
+    "    df.movie_name = df.movie_name.apply(lambda x: x.replace('혻',''))\n",
+    "    \n",
+    "    df.movie_summary = df.movie_summary.apply(lambda x: str(x).lower())\n",
+    "    df.movie_summary = df.movie_summary.apply(lambda x: re.sub(\"[^A-Za-z. 0-9]\", '', x))\n",
+    "    \n",
+    "    df.movie_synopsis = df.movie_synopsis.apply(lambda x : str(x).lower())\n",
+    "    df.movie_synopsis = df.movie_synopsis.apply(lambda x : re.sub('[^A-Za-z. ]', '', x))\n",
+    "    \n",
+    "    df.movie_tagline = df.movie_tagline.apply(lambda x: str(x).lower())\n",
+    "    df.movie_tagline = df.movie_tagline.apply(lambda x: x.replace('\\\\n','').replace('\\\\xa0',''))\n",
+    "    df.movie_tagline = df.movie_tagline.apply(lambda x : re.sub('[^A-Za-z. 0-9]', '', x))\n",
+    "    df.movie_tagline = df.movie_tagline.apply(lambda x : re.sub(' {2,}', '', x))\n",
+    "    \n",
+    "    #태그라인 없는 데이터 row 삭제\n",
+    "    index = df[df['movie_tagline']==''].index\n",
+    "    df.drop(index, inplace = True)\n",
+    "\n",
+    "    #summary 없는 데이터 row 삭제\n",
+    "    summary_index = df[df['movie_summary']==''].index\n",
+    "    df.drop(summary_index, inplace = True)\n",
+    "    \n",
+    "    index = df[df['movie_summary'].str.contains('  ')].index\n",
+    "    df.drop(index , inplace = True)\n",
+    "\n",
+    "    df = df.reset_index()\n",
+    "    \n",
+    "#     #summary 문장 수가 너무 많을 경우 summarize를 통해 압축\n",
+    "#     for idx, summary in enumerate(df['movie_summary']):\n",
+    "#         x = summary.split('. ')\n",
+    "#         #print(x)\n",
+    "#         if len(x) <= 2:\n",
+    "#             df['movie_summary'][idx] = summary\n",
+    "#         else:\n",
+    "#             df['movie_summary'][idx] = summarize(summary, word_count=150,ratio = 0.3)\n",
+    "        \n",
+    "        \n",
+    "    index = df[df['movie_summary']==''].index\n",
+    "    df.drop(index, inplace=True)\n",
+    "    df = df.reset_index()\n",
+    "    \n",
+    "    return df\n",
+    "\n",
+    "def processed_df(df):\n",
+    "    tl = list(df[\"movie_tagline\"])\n",
+    "    tl = [\"\".join([ j for j in i if j != \"\\n\"]).strip() for i in tl]\n",
+    "\n",
+    "    summ = list(df['movie_summary'])\n",
+    "\n",
+    "    df.movie_tagline = tl\n",
+    "    df.movie_summary = summ\n",
+    "\n",
+    "    sources = [i.split() for i in df['movie_summary']]\n",
+    "    targets = [i.split() for i in df['movie_tagline']]\n",
+    "    return sources, targets"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 단어 나누기"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 187,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df1 = preprocessing(df)\n",
+    "sources, targets = processed_df(df1)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 188,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "DyLQNxKpUMIG"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "(42272, 7871)"
+      ]
+     },
+     "execution_count": 188,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "\n",
+    "# vocabulary for sources\n",
+    "s_vocab = list(set(sum(sources, [])))\n",
+    "s_vocab.sort()\n",
+    "s_vocab = ['<pad>'] + s_vocab\n",
+    "source2idx = {word : idx for idx, word in enumerate(s_vocab)}\n",
+    "idx2source = {idx : word for idx, word in enumerate(s_vocab)}\n",
+    "\n",
+    "len(s_vocab), len(t_vocab)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 142,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 34
+    },
+    "colab_type": "code",
+    "id": "VSvzvLRqWMxd",
+    "outputId": "b428a9bf-ab67-4366-f365-f07d9962e966"
+   },
+   "outputs": [],
+   "source": [
+    "# vocabulary for targets\n",
+    "t_vocab = list(set(sum(targets, [])))\n",
+    "t_vocab.sort()\n",
+    "t_vocab = ['<pad>', '<bos>', '<eos>'] + t_vocab\n",
+    "target2idx = {word : idx for idx, word in enumerate(t_vocab)}\n",
+    "idx2target = {idx : word for idx, word in enumerate(t_vocab)}\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 102,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "EAAWkUptOppB"
+   },
+   "outputs": [],
+   "source": [
+    "def preprocess(sequences, max_len, dic, mode = 'source'):\n",
+    "    assert mode in ['source', 'target'], 'source와 target 중에 선택해주세요.'\n",
+    "    \n",
+    "    if mode == 'source':\n",
+    "        # preprocessing for source (encoder)\n",
+    "        s_input = list(map(lambda sentence : [dic.get(token) for token in sentence], sequences))\n",
+    "        \n",
+    "        #s_input = [[x for x in each_input if x] for each_input in s_input]\n",
+    "        #pprint(s_input)\n",
+    "        s_len = list(map(lambda sentence : len(sentence), s_input))\n",
+    "        s_input = pad_sequences(sequences = s_input, maxlen = max_len, padding = 'post', truncating = 'post')\n",
+    "        return s_len, s_input\n",
+    "    \n",
+    "\n",
+    "    elif mode == 'target':\n",
+    "        # preprocessing for target (decoder)\n",
+    "        # input\n",
+    "        t_input = list(map(lambda sentence : ['<bos>'] + sentence + ['<eos>'], sequences))\n",
+    "        \n",
+    "        #t_input = [[x for x in each_input if x] for each_input in t_input]\n",
+    "        #pprint(t_input)\n",
+    "        t_input = list(map(lambda sentence : [dic.get(token) for token in sentence], t_input))\n",
+    "        t_len = list(map(lambda sentence : len(sentence), t_input))\n",
+    "        t_input = pad_sequences(sequences = t_input, maxlen = max_len, padding = 'post', truncating = 'post')\n",
+    "     \n",
+    "        # output\n",
+    "        t_output = list(map(lambda sentence : sentence + ['<eos>'], sequences))\n",
+    "        t_output = list(map(lambda sentence : [dic.get(token) for token in sentence], t_output))\n",
+    "        t_output = pad_sequences(sequences = t_output, maxlen = max_len, padding = 'post', truncating = 'post')\n",
+    "        \n",
+    "        return t_len, t_input, t_output"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 103,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "CBUcpthCOppD"
+   },
+   "outputs": [],
+   "source": [
+    "# preprocessing for source\n",
+    "s_max_len = 10\n",
+    "s_len, s_input = preprocess(sequences = sources,\n",
+    "                            max_len = s_max_len, dic = source2idx, mode = 'source')\n",
+    "#print(s_len, s_input)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 104,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 266
+    },
+    "colab_type": "code",
+    "id": "7h99OdPeOppF",
+    "outputId": "859561c3-524d-4c94-8e47-283143811df1",
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[5, 7, 18, 5, 7, 9, 17, 5, 9, 9, 9, 6, 5, 5, 25, 8, 8, 8, 4, 8, 5, 8, 26, 17, 7, 6, 13, 11, 47, 6, 12, 13, 6, 10, 15, 8, 6, 17, 9, 9, 75, 35, 12, 8, 4, 10, 12, 8, 13, 8, 4, 12, 22, 4, 7, 6, 4, 10, 5, 23, 8, 8, 5, 7, 10, 10, 7, 12, 7, 5, 7, 6, 23, 7, 6, 5, 12, 6, 10, 14, 19, 4, 12, 7, 6, 15, 8, 8, 6, 9, 37, 15, 6, 5, 13, 8, 11, 7, 13, 10, 7, 5, 9, 6, 7, 9, 6, 16, 10, 14, 9, 10, 16, 11, 8, 6, 10, 6, 8, 8, 21, 11, 10, 23, 6, 6, 5, 13, 10, 6, 10, 12, 5, 7, 8, 5, 7, 5, 12, 8, 9, 10, 8, 8, 6, 4, 9, 4, 6, 11, 5, 14, 11, 5, 11, 12, 13, 6, 7, 29, 10, 8, 13, 10, 10, 7, 7, 5, 11, 10, 6, 7, 26, 7, 9, 7, 8, 8, 9, 11, 6, 7, 11, 6, 8, 6, 14, 5, 9, 16, 11, 18, 6, 45, 9, 5, 8, 7, 9, 23, 9, 9, 13, 16, 8, 9, 9, 17, 4, 7, 10, 14, 5, 6, 7, 12, 8, 9, 5, 17, 5, 14, 26, 10, 11, 5, 8, 8, 6, 11, 7, 7, 13, 6, 13, 15, 6, 7, 26, 9, 12, 10, 12, 16, 9, 8, 11, 11, 6, 15, 7, 8, 12, 8, 5, 10, 8, 11, 10, 9, 9, 6, 9, 16, 10, 8, 6, 16, 12, 10, 6, 12, 8, 9, 6, 8, 20, 15, 14, 9, 7, 19, 12, 9, 6, 6, 14, 8, 13, 10, 11, 9, 15, 11, 18, 11, 15, 6, 10, 13, 18, 13, 8, 6, 10, 9, 8, 9, 6, 14, 11, 20, 9, 10, 3, 6, 9, 8, 10, 14, 5, 28, 10, 18, 7, 25, 10, 13, 9, 10, 9, 13, 11, 16, 7, 19, 8, 7, 10, 10, 17, 7, 10, 6, 8, 32, 7, 20, 11, 8, 14, 17, 5, 5, 8, 5, 5, 16, 5, 6, 7, 16, 10, 9, 5, 15, 9, 15, 6, 6, 20, 5, 10, 6, 5, 9, 5, 4, 6, 9, 9, 10, 4, 13, 7, 11, 26, 7, 6, 13, 9, 10, 6, 8, 6, 12, 8, 8, 8, 9, 7, 7, 27, 7, 7, 11, 11, 10, 16, 16, 9, 6, 9, 9, 9, 7, 7, 11, 7, 21, 23, 9, 16, 8, 8, 10, 8, 7, 13, 3, 11, 10, 11, 13, 4, 8, 12, 18, 10, 12, 8, 28, 10, 11, 7, 11, 6, 9, 7, 19, 10, 7, 6, 10, 18, 7, 13, 6, 7, 16, 14, 13, 20, 4, 5, 11, 6, 7, 12, 9, 9, 7, 7, 4, 8, 9, 7, 12, 12, 10, 8, 5, 15, 11, 4, 10, 13, 13, 14, 6, 16, 8, 7, 6, 5, 6, 10, 9, 5, 6, 19, 9, 13, 7, 10, 5, 13, 26, 12, 10, 4, 6, 7, 7, 13, 6, 8, 5, 21, 8, 7, 6, 8, 16, 6, 8, 16, 9, 21, 25, 20, 6, 9, 5, 14, 21, 20, 19, 16, 14, 10, 9, 14, 7, 10, 6, 13, 4, 32, 7, 5, 10, 9, 7, 13, 46, 8, 6, 6, 8, 8, 9, 9, 6, 7, 12, 11, 10, 16, 21, 6, 18, 11, 13, 6, 13, 10, 13, 6, 9, 13, 14, 11, 7, 12, 8, 4, 15, 12, 7, 10, 9, 13, 9, 10, 9, 7, 11, 19, 18, 6, 12, 12, 6, 10, 10, 10, 5, 9, 7, 6, 13, 12, 7, 9, 12, 7, 7, 7, 9, 6, 6, 11, 6, 9, 9, 14, 6, 13, 7, 9, 7, 10, 12, 16, 22, 9, 16, 9, 6, 13, 15, 10, 7, 7, 8, 9, 7, 6, 12, 5, 7, 8, 9, 9, 8, 9, 7, 13, 13, 23, 10, 5, 5, 16, 10, 13, 12, 12, 9, 22, 6, 8, 5, 9, 4, 17, 4, 13, 9, 10, 9, 12, 6, 9, 10, 13, 8, 9, 6, 10, 6, 9, 11, 13, 18, 8, 12, 6, 7, 24, 8, 7, 7, 12, 6, 13, 6, 14, 11, 10, 4, 13, 6, 7, 10, 7, 7, 10, 16, 5, 15, 10, 5, 7, 11, 7, 8, 19, 11, 5, 8, 5, 5, 6, 21, 16, 11, 10, 6, 13, 9, 15, 6, 11, 13, 10, 11, 16, 13, 14, 9, 20, 12, 21, 7, 10, 13, 11, 5, 7, 5, 13, 6, 18, 10, 13, 13, 5, 7, 13, 9, 12, 13, 8, 10, 5, 5, 15, 28, 8, 10, 7, 10, 9, 9, 9, 6, 10, 9, 15, 7, 6, 13, 17, 7, 18, 4, 9, 28, 9, 19, 10, 10, 7, 12, 12, 9, 9, 8, 5, 15, 19, 6, 8, 9, 25, 7, 16, 8, 12, 116, 11, 5, 8, 22, 12, 7, 8, 30, 12, 5, 5, 6, 9, 5, 8, 21, 9, 9, 7, 9, 11, 18, 12, 37, 6, 5, 8, 8, 12, 8, 19, 10, 22, 19, 6, 22, 9, 23, 8, 8, 7, 17, 11, 10, 17, 12, 6, 14, 19, 14, 14, 5, 9, 14, 10, 16, 6, 9, 10, 6, 13, 7, 13, 11, 13, 6, 6, 9, 99, 12, 10, 13, 13, 16, 8, 17, 11, 10, 5, 11, 12, 7, 9, 8, 10, 19, 10, 18, 7, 13, 35, 10, 14, 10, 5, 6, 14, 7, 10, 6, 8, 5, 8, 13, 6, 12, 12, 10, 6, 11, 10, 12, 4, 6, 16, 10, 12, 7, 9, 16, 12, 11, 14, 6, 5, 8, 8, 12, 11, 17, 8, 10, 6, 7, 6, 8, 16, 5, 6, 8, 25, 7, 6, 9, 14, 11, 20, 15, 10, 18, 16, 7, 10, 8, 8, 9, 11, 6, 19, 16, 6, 13, 6, 7, 9, 10, 9, 7, 7, 13, 13, 17, 9, 16, 17, 9, 11, 13, 16, 22, 9, 10, 12, 7, 7, 8, 6, 8, 28, 5, 10, 5, 8, 4, 9, 21, 16, 19, 6, 8, 7, 8, 14, 10, 12, 6, 9, 11, 15, 10, 19, 12, 7, 6, 5, 26, 9, 14, 4, 5, 8, 5, 13, 12, 10, 7, 14, 12, 8, 7, 7, 21, 7, 9, 14, 6, 16, 8, 19, 10, 8, 12, 6, 10, 7, 16, 14, 11, 7, 8, 16, 13, 7, 7, 8, 13, 13, 8, 8, 8, 19, 36, 13, 10, 10, 6, 8, 6, 9, 8, 11, 12, 10, 9, 12, 6, 8, 9, 7, 5, 5, 9, 12, 8, 28, 14, 12, 10, 14, 5, 13, 9, 5, 5, 20, 13, 10, 10, 9, 4, 8, 15, 10, 15, 63, 11, 8, 17, 10, 9, 12, 6, 5, 18, 5, 5, 9, 26, 11, 11, 7, 14, 13, 9, 7, 7, 7, 7, 3, 5, 6, 10, 9, 14, 5, 7, 12, 7, 19, 13, 12, 13, 6, 7, 6, 12, 6, 9, 11, 8, 29, 34, 10, 9, 14, 6, 19, 10, 8, 8, 6, 20, 8, 20, 8, 15, 4, 7, 7, 7, 11, 8, 15, 11, 13, 15, 8, 8, 12, 5, 11, 7, 23, 5, 11, 12, 11, 9, 6, 8, 7, 8, 8, 11, 7, 9, 9, 10, 37, 13, 13, 12, 10, 11, 11, 9, 13, 10, 7, 20, 22, 17, 5, 8, 9, 7, 10, 9, 23, 7, 7, 7, 23, 5, 25, 8, 34, 11, 11, 15, 18, 11, 5, 11, 5, 13, 24, 6, 7, 16, 8, 9, 9, 11, 5, 14, 8, 20, 6, 10, 10, 11, 13, 21, 8, 10, 9, 9, 6, 15, 8, 13, 6, 14, 26, 6, 6, 8, 16, 4, 7, 16, 19, 20, 5, 6, 5, 18, 5, 10, 27, 9, 8, 12, 11, 9, 13, 9, 17, 10, 6, 6, 8, 13, 8, 25, 9, 10, 5, 11, 6, 9, 10, 8, 17, 14, 10, 9, 23, 4, 9, 9, 8, 18, 6, 10, 8, 9, 11, 9, 7, 39, 10, 21, 7, 5, 12, 16, 17, 7, 8, 8, 11, 18, 15, 10, 10, 10, 7, 21, 12, 14, 23, 8, 12, 16, 11, 8, 19, 7, 27, 7, 15, 8, 8, 8, 9, 16, 9, 8, 15, 9, 5, 12, 19, 8, 21, 10, 13, 10, 12, 6, 8, 8, 7, 21, 12, 11, 26, 6, 5, 17, 7, 11, 13, 9, 9, 16, 11, 5, 7, 9, 8, 9, 5, 11, 10, 11, 12, 25, 5, 36, 6, 11, 21, 15, 13, 18, 17, 10, 10, 17, 9, 9, 14, 6, 13, 9, 12, 9, 35, 12, 8, 19, 14, 7, 20, 13, 9, 11, 11, 13, 23, 5, 9, 11, 12, 10, 41, 11, 11, 14, 11, 37, 8, 7, 5, 8, 5, 6, 14, 9, 12, 6, 6, 9, 9, 10, 6, 14, 12, 21, 10, 7, 14, 12, 16, 8, 22, 6, 24, 10, 10, 11, 18, 12, 8, 9, 14, 9, 9, 8, 7, 13, 12, 9, 17, 22, 12, 13, 7, 7, 7, 11, 16, 8, 7, 8, 12, 21, 11, 13, 9, 8, 9, 11, 9, 10, 14, 11, 12, 16, 14, 12, 5, 10, 7, 6, 13, 7, 22, 6, 10, 19, 12, 6, 6, 10, 9, 6, 9, 11, 4, 10, 16, 18, 15, 15, 14, 5, 9, 8, 8, 6, 12, 32, 7, 10, 10, 19, 10, 11, 9, 6, 9, 9, 9, 12, 12, 17, 7, 9, 14, 9, 8, 8, 10, 8, 15, 12, 30, 14, 18, 20, 6, 8, 11, 12, 8, 10, 13, 17, 9, 10, 16, 10, 10, 7, 16, 9, 11, 6, 10, 14, 7, 12, 12, 11, 13, 7, 7, 11, 7, 12, 14, 8, 7, 8, 10, 9, 10, 9, 8, 19, 23, 7, 12, 17, 7, 8, 8, 9, 10, 21, 12, 17, 7, 10, 13, 8, 8, 37, 4, 12, 6, 17, 15, 9, 10, 19, 5, 13, 28, 15, 5, 12, 12, 15, 9, 12, 12, 11, 3, 13, 20, 8, 24, 9, 8, 14, 17, 8, 9, 6, 18, 8, 9, 38, 13, 10, 14, 5, 24, 5, 5, 8, 17, 11, 7, 11, 12, 7, 11, 15, 11, 15, 8, 5, 9, 12, 6, 13, 11, 9, 10, 12, 8, 6, 6, 6, 15, 13, 15, 12, 8, 17, 13, 5, 19, 10, 8, 23, 27, 6, 33, 13, 10, 5, 4, 6, 6, 5, 32, 5, 16, 11, 24, 11, 9, 18, 10, 6, 5, 7, 9, 23, 12, 11, 6, 7, 7, 23, 11, 7, 9, 7, 12, 8, 5, 12, 5, 9, 8, 10, 7, 12, 20, 9, 40, 7, 6, 12, 6, 20, 27, 7, 9, 18, 5, 15, 4, 8, 10, 15, 7, 5, 12, 12, 7, 7, 19, 8, 14, 12, 8, 10, 9, 8, 9, 10, 10, 18, 12, 15, 13, 8, 13, 14, 10, 6, 5, 19, 6, 9, 7, 11, 5, 11, 9, 9, 9, 9, 9, 23, 13, 9, 12, 12, 12, 18, 11, 14, 7, 12, 6, 17, 10, 19, 18, 6, 11, 9, 4, 8, 8, 5, 17, 8, 8, 12, 14, 14, 21, 13, 12, 21, 4, 7, 6, 8, 13, 7, 12, 13, 11, 8, 6, 10, 5, 6, 6, 7, 8, 11, 5, 10, 6, 13, 12, 4, 7, 11, 8, 13, 9, 8, 7, 7, 7, 17, 13, 14, 6, 6, 6, 9, 7, 16, 8, 8, 18, 5, 11, 13, 13, 5, 12, 19, 5, 10, 21, 5, 12, 18, 5, 10, 14, 9, 10, 8, 19, 6, 10, 7, 7, 7, 19, 9, 17, 6, 8, 15, 12, 5, 13, 22, 14, 30, 14, 13, 12, 12, 19, 21, 15, 7, 4, 10, 14, 9, 16, 24, 9, 11, 10, 7, 10, 12, 8, 7, 8, 9, 8, 7, 5, 14, 10, 13, 10, 7, 15, 6, 20, 7, 13, 9, 8, 5, 10, 14, 21, 15, 20, 10, 7, 6, 8, 11, 5, 5, 27, 14, 6, 37, 6, 14, 9, 8, 10, 22, 10, 13, 5, 6, 15, 12, 21, 12, 7, 18, 12, 13, 17, 6, 9, 12, 11, 12, 6, 11, 7, 16, 12, 13, 11, 18, 18, 11, 18, 15, 9, 5, 16, 8, 11, 8, 13, 13, 8, 11, 5, 13, 9, 12, 6, 9, 13, 5, 12, 8, 13, 8, 9, 6, 12, 9, 12, 10, 8, 11, 8, 18, 8, 12, 6, 18, 14, 7, 11, 8, 8, 6, 7, 5, 6, 14, 22, 27, 7, 10, 8, 10, 6, 5, 10, 10, 10, 6, 7, 8, 7, 3, 24, 14, 9, 15, 10, 8, 11, 7, 31, 8, 8, 7, 26, 5, 11, 19, 6, 20, 11, 12, 6, 10, 11, 9, 16, 14, 12, 14, 9, 9, 7, 16, 5, 8, 6, 9, 10, 20, 12, 11, 9, 7, 6, 13, 9, 54, 13, 17, 7, 15, 38, 8, 12, 5, 10, 8, 12, 17, 8, 9, 18, 11, 5, 6, 24, 5, 13, 9, 6, 19, 9, 29, 11, 12, 12, 10, 10, 5, 7, 17, 9, 14, 8, 17, 6, 17, 12, 10, 31, 7, 13, 8, 10, 12, 6, 8, 22, 7, 8, 9, 11, 19, 11, 13, 18, 13, 9, 9, 8, 15, 14, 6, 13, 8, 21, 10, 28, 12, 7, 10, 3, 16, 5, 12, 16, 15, 11, 7, 9, 31, 7, 15, 6, 11, 6, 8, 10, 5, 5, 9, 8, 8, 20, 10, 11, 11, 7, 8, 11, 11, 12, 8, 11, 12, 7, 7, 10, 14, 9, 11, 7, 28, 7, 8, 10, 13, 14, 9, 13, 12, 7, 6, 6, 24, 10, 15, 6, 7, 9, 6, 15, 11, 9, 31, 14, 8, 7, 7, 13, 10, 20, 8, 8, 4, 14, 10, 7, 16, 13, 17, 6, 6, 6, 13, 10, 11, 7, 11, 8, 6, 11, 8, 9, 4, 8, 9, 12, 5, 10, 8, 10, 7, 9, 9, 8, 13, 12, 9, 17, 7, 11, 5, 16, 10, 9, 14, 13, 8, 24, 5, 16, 8, 27, 6, 11, 12, 17, 12, 16, 17, 15, 8, 7, 17, 7, 5, 8, 12, 17, 7, 4, 18, 10, 7, 17, 5, 7, 9, 4, 11, 14, 14, 11, 5, 8, 8, 12, 10, 5, 11, 26, 10, 9, 9, 9, 20, 5, 6, 9, 7, 21, 11, 7, 13, 7, 32, 15, 9, 10, 15, 13, 10, 10, 11, 28, 11, 8, 10, 10, 4, 8, 7, 14, 14, 12, 20, 12, 18, 7, 9, 6, 10, 11, 8, 11, 8, 12, 11, 14, 9, 13, 6, 6, 26, 9, 16, 8, 7, 13, 23, 7, 24, 8, 11, 10, 12, 6, 9, 7, 13, 8, 13, 8, 8, 17, 9, 29, 10, 8, 7, 11, 33, 17, 14, 10, 12, 6, 7, 28, 6, 9, 26, 13, 11, 7, 20, 7, 12, 10, 4, 7, 12, 33, 28, 11, 7, 15, 7, 7, 24, 14, 11, 10, 6, 7, 11, 9, 9, 18, 11, 17, 7, 12, 10, 6, 6, 19, 14, 7, 9, 18, 11, 8, 10, 6, 21, 8, 16, 8, 6, 6, 9, 12, 16, 9, 14, 8, 14, 8, 13, 45, 9, 23, 14, 6, 16, 16, 10, 15, 12, 10, 13, 8, 13, 10, 9, 14, 11, 6, 20, 9, 21, 6, 9, 10, 11, 5, 15, 6, 51, 19, 7, 10, 7, 11, 5, 12, 7, 13, 8, 19, 6, 10, 12, 13, 21, 11, 11, 8, 9, 9, 10, 51, 7, 12, 11, 9, 8, 8, 16, 11, 5, 6, 21, 11, 14, 10, 8, 8, 8, 6, 7, 16, 9, 10, 19, 6, 5, 5, 10, 15, 14, 8, 14, 18, 24, 10, 5, 12, 6, 8, 4, 16, 7, 15, 7, 13, 15, 13, 10, 38, 12, 14, 21, 9, 9, 13, 14, 7, 13, 14, 10, 9, 13, 7, 7, 10, 7, 9, 11, 10, 11, 10, 8, 18, 8, 26, 9, 19, 7, 7, 5, 5, 12, 11, 6, 21, 12, 13, 11, 22, 9, 8, 5, 12, 6, 11, 10, 10, 8, 20, 11, 8, 12, 9, 9, 12, 6, 23, 9, 6, 5, 13, 16, 8, 8, 6, 13, 12, 14, 18, 17, 11, 8, 7, 14, 13, 8, 12, 9, 11, 10, 9, 15, 8, 11, 8, 14, 8, 16, 13, 10, 12, 6, 30, 9, 11, 11, 15, 6, 9, 9, 6, 6, 19, 12, 12, 13, 6, 38, 13, 12, 11, 16, 7, 10, 9, 12, 9, 16, 8, 8, 8, 5, 4, 9, 15, 30, 17, 7, 9, 10, 33, 9, 7, 7, 17, 14, 13, 20, 10, 7, 8, 7, 7, 17, 11, 12, 11, 6, 10, 8, 15, 12, 19, 10, 9, 5, 12, 12, 4, 26, 7, 9, 9, 6, 11, 22, 11, 9, 10, 16, 10, 22, 7, 6, 8, 8, 12, 6, 15, 13, 16, 11, 5, 18, 9, 13, 8, 6, 9, 6, 9, 8, 4, 11, 10, 4, 8, 8, 10, 13, 13, 7, 6, 4, 14, 19, 9, 10, 10, 10, 7, 19, 8, 15, 8, 33, 14, 13, 10, 10, 19, 8, 11, 12, 10, 23, 15, 9, 18, 11, 16, 6, 9, 18, 7, 10, 18, 5, 6, 7, 26, 13, 7, 11, 11, 11, 13, 7, 10, 7, 8, 9, 5, 19, 8, 31, 23, 6, 5, 10, 5, 17, 12, 15, 14, 13, 5, 42, 9, 6, 10, 12, 10, 9, 9, 17, 20, 14, 14, 6, 7, 6, 9, 10, 9, 9, 7, 14, 14, 6, 9, 16, 5, 6, 6, 22, 7, 8, 13, 8, 6, 5, 11, 7, 7, 11, 7, 8, 8, 7, 15, 6, 13, 11, 8, 9, 21, 15, 6, 8, 16, 10, 9, 18, 4, 7, 16, 19, 4, 13, 14, 10, 18, 13, 8, 34, 7, 12, 16, 18, 18, 9, 14, 27, 26, 7, 17, 6, 6, 9, 8, 15, 6, 9, 11, 6, 10, 13, 13, 12, 12, 6, 13, 8, 7, 5, 11, 6, 7, 12, 7, 8, 10, 13, 13, 6, 13, 41, 5, 12, 10, 6, 10, 6, 13, 12, 9, 9, 15, 17, 5, 4, 10, 13, 12, 7, 12, 10, 9, 6, 10, 16, 9, 19, 9, 6, 7, 16, 4, 8, 14, 11, 5, 9, 10, 11, 12, 4, 8, 21, 6, 6, 9, 11, 13, 16, 14, 6, 16, 6, 10, 12, 6, 12, 8, 8, 11, 44, 9, 19, 33, 9, 13, 13, 11, 21, 5, 9, 14, 7, 20, 5, 10, 6, 6, 17, 20, 9, 20, 7, 12, 6, 7, 14, 10, 16, 17, 5, 13, 14, 5, 5, 11, 16, 9, 16, 6, 8, 6, 13, 5, 8, 17, 5, 11, 19, 12, 12, 8, 6, 15, 16, 9, 10, 8, 8, 8, 14, 18, 7, 19, 10, 11, 7, 6, 10, 8, 8, 16, 14, 11, 10, 8, 27, 15, 8, 8, 9, 8, 6, 12, 5, 12, 12, 8, 9, 57, 16, 5, 7, 7, 10, 12, 5, 8, 12, 16, 10, 15, 7, 40, 8, 10, 8, 12, 4, 18, 7, 6, 8, 9, 7, 9, 21, 15, 8, 5, 5, 8, 9, 19, 7, 8, 12, 22, 15, 10, 11, 14, 7, 6, 21, 6, 11, 7, 9, 7, 12, 10, 9, 8, 8, 7, 9, 17, 8, 8, 10, 30, 14, 11, 9, 17, 10, 6, 14, 7, 5, 8, 6, 16, 10, 7, 8, 11, 7, 10, 7, 8, 16, 26, 6, 9, 16, 10, 12, 9, 9, 10, 10, 7, 5, 6, 11, 13, 15, 9, 8, 9, 14, 8, 12, 6, 12, 6, 13, 4, 6, 8, 7, 11, 6, 7, 6, 8, 8, 9, 10, 8, 9, 8, 21, 6, 10, 15, 7, 11, 6, 11, 10, 12, 11, 47, 11, 10, 15, 27, 18, 6, 12, 6, 12, 8, 13, 16, 28, 9, 9, 10, 9, 11, 15, 10, 7, 6, 19, 8, 13, 9, 5, 13, 6, 7, 9, 7, 8, 5, 12, 11, 8, 14, 5, 13, 16, 13, 12, 15, 12, 6, 17, 9, 6, 9, 10, 9, 13, 8, 10, 8, 13, 27, 7, 7, 13, 8, 10, 14, 11, 11, 22, 15, 11, 12, 10, 10, 31, 5, 8, 10, 12, 9, 8, 7, 12, 7, 12, 11, 10, 13, 7, 18, 6, 10, 18, 13, 18, 10, 11, 11, 8, 13, 8, 12, 5, 14, 7, 10, 21, 8, 9, 3, 7, 6, 12, 22, 12, 12, 13, 13, 6, 29, 7, 11, 13, 12, 17, 9, 16, 17, 16, 8, 29, 12, 5, 8, 12, 7, 4, 11, 9, 17, 12, 10, 6, 32, 12, 5, 14, 17, 14, 11, 6, 11, 11, 9, 14, 4, 7, 19, 7, 8, 7, 18, 7, 7, 16, 13, 11, 11, 9, 6, 6, 11, 6, 5, 14, 11, 7, 11, 5, 17, 13, 8, 5, 9, 15, 9, 14, 7, 8, 4, 23, 18, 8, 9, 7, 9, 11, 8, 5, 27, 9, 9, 19, 17, 24, 13, 8, 5, 6, 13, 5, 11, 7, 9, 9, 20, 7, 8, 12, 10, 10, 7, 5, 11, 9, 9, 8, 9, 13, 9, 9, 10, 19, 9, 6, 12, 13, 12, 6, 11, 15, 12, 9, 12, 6, 14, 5, 16, 22, 7, 14, 9, 12, 7, 12, 16, 5, 11, 9, 7, 5, 12, 16, 9, 10, 10, 49, 11, 17, 4, 8, 7, 20, 8, 10, 12, 13, 14, 11, 17, 11, 8, 21, 10, 25, 11, 9, 9, 6, 19, 7, 9, 9, 10, 16, 10, 15, 8, 15, 19, 12, 9, 8, 9, 8, 12, 10, 5, 17, 8, 6, 12, 16, 6, 8, 16, 5, 14, 7, 10, 7, 16, 17, 8, 7, 15, 20, 15, 8, 13, 19, 8, 20, 11, 23, 21, 10, 5, 15, 10, 5, 11, 27, 10, 26, 11, 23, 5, 12, 18, 11, 9, 8, 12, 14, 6, 12, 12, 18, 10, 14, 16, 35, 11, 18, 19, 11, 5, 9, 10, 11, 17, 6, 12, 27, 15, 31, 12, 9, 9, 9, 5, 13, 14, 9, 7, 29, 12, 8, 8, 16, 10, 24, 10, 9, 12, 8, 8, 13, 7, 11, 7, 18, 11, 16, 11, 10, 11, 8, 13, 13, 6, 13, 7, 14, 5, 11, 9, 9, 10, 6, 6, 8, 13, 10, 9, 7, 11, 11, 6, 17, 14, 13, 5, 21, 11, 7, 25, 8, 5, 18, 17, 5, 11, 5, 14, 18, 9, 6, 8, 12, 11, 8, 8, 16, 15, 28, 9, 41, 5, 10, 11, 12, 10, 8, 12, 8, 11, 17, 29, 10, 9, 18, 5, 4, 11, 11, 11, 6, 8, 6, 4, 7, 6, 9, 10, 12, 10, 11, 11, 10, 6, 14, 7, 9, 32, 8, 12, 8, 7, 8, 10, 7, 7, 12, 5, 11, 13, 14, 15, 8, 7, 7, 10, 8, 14, 19, 7, 17, 8, 17, 10, 7, 8, 7, 3, 26, 8, 10, 8, 19, 34, 16, 8, 12, 19, 13, 8, 49, 27, 9, 10, 16, 11, 16, 7, 41, 19, 7, 19, 26, 19, 15, 14, 9, 10, 6, 13, 14, 12, 11, 12, 16, 9, 25, 8, 12, 7, 7, 21, 7, 25, 11, 8, 7, 8, 7, 10, 10, 5, 17, 18, 16, 13, 10, 11, 11, 6, 3, 8, 6, 7, 5, 10, 15, 14, 10, 15, 23, 11, 7, 5, 8, 15, 17, 37, 19, 6, 16, 5, 8, 23, 12, 17, 17, 8, 10, 11, 11, 14, 7, 6, 23, 36, 5, 6, 3, 8, 14, 7, 8, 6, 9, 13, 11, 15, 11, 8, 6, 7, 8, 9, 5, 6, 6, 13, 6, 14, 7, 6, 6, 15, 6, 41, 7, 6, 7, 12, 9, 19, 8, 13, 7, 6, 5, 8, 13, 13, 7, 20, 6, 10, 11, 10, 10, 18, 16, 24, 9, 23, 6, 7, 8, 8, 12, 13, 34, 11, 6, 31, 7, 15, 5, 5, 7, 15, 7, 10, 13, 4, 12, 16, 6, 19, 9, 8, 8, 5, 10, 9, 6, 5, 27, 8, 41, 14, 6, 7, 9, 5, 12, 16, 8, 6, 7, 9, 24, 19, 11, 4, 9, 15, 15, 12, 6, 9, 8, 13] [[   1 7020 4887 ...    0    0    0]\n",
+      " [   1 3778  374 ...    0    0    0]\n",
+      " [   1  383 7743 ... 2069 7894 7020]\n",
+      " ...\n",
+      " [   1 7235 2190 ...    0    0    0]\n",
+      " [   1 4016  307 ...    0    0    0]\n",
+      " [   1 6385 6384 ... 7858 4234 2777]] [[7020 4887 1297 ...    0    0    0]\n",
+      " [3778  374 7020 ...    0    0    0]\n",
+      " [ 383 7743 3268 ... 7894 7020 7134]\n",
+      " ...\n",
+      " [7235 2190 6891 ...    0    0    0]\n",
+      " [4016  307 5014 ...    0    0    0]\n",
+      " [6385 6384 3803 ... 4234 2777    2]]\n"
+     ]
+    }
+   ],
+   "source": [
+    "# preprocessing for target\n",
+    "t_max_len = 12\n",
+    "t_len, t_input, t_output = preprocess(sequences = targets,\n",
+    "                                      max_len = t_max_len, dic = target2idx, mode = 'target')\n",
+    "print(t_len, t_input, t_output)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "colab_type": "text",
+    "id": "QsR434UDOppG"
+   },
+   "source": [
+    "# hyper-param"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 105,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "2lpR38GaOppH"
+   },
+   "outputs": [],
+   "source": [
+    "# hyper-parameters\n",
+    "epochs = 100\n",
+    "batch_size = 2\n",
+    "learning_rate = .005\n",
+    "total_step = epochs / batch_size\n",
+    "buffer_size = 100\n",
+    "n_batch = buffer_size//batch_size\n",
+    "embedding_dim = 32\n",
+    "units = 32\n",
+    "\n",
+    "# input\n",
+    "data = tf.data.Dataset.from_tensor_slices((s_len, s_input, t_len, t_input, t_output))\n",
+    "data = data.shuffle(buffer_size = buffer_size)\n",
+    "data = data.batch(batch_size = batch_size)\n",
+    "# s_mb_len, s_mb_input, t_mb_len, t_mb_input, t_mb_output = iterator.get_next()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 106,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "FvW8dx1MOppJ"
+   },
+   "outputs": [],
+   "source": [
+    "def gru(units):\n",
+    "  # If you have a GPU, we recommend using CuDNNGRU(provides a 3x speedup than GRU)\n",
+    "  # the code automatically does that.\n",
+    "    if tf.test.is_gpu_available():\n",
+    "        return tf.keras.layers.CuDNNGRU(units, \n",
+    "                                        return_sequences=True, \n",
+    "                                        return_state=True, \n",
+    "                                        recurrent_initializer='glorot_uniform')\n",
+    "    else:\n",
+    "        return tf.keras.layers.GRU(units, \n",
+    "                                   return_sequences=True, \n",
+    "                                   return_state=True, \n",
+    "                                   recurrent_activation='sigmoid', \n",
+    "                                   recurrent_initializer='glorot_uniform')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 107,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "znne20C3OppL"
+   },
+   "outputs": [],
+   "source": [
+    "class Encoder(tf.keras.Model):\n",
+    "    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz):\n",
+    "        super(Encoder, self).__init__()\n",
+    "        self.batch_sz = batch_sz\n",
+    "        self.enc_units = enc_units\n",
+    "        self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)\n",
+    "        self.gru = gru(self.enc_units)\n",
+    "        \n",
+    "    def call(self, x, hidden):\n",
+    "        x = self.embedding(x)\n",
+    "        output, state = self.gru(x, initial_state = hidden)\n",
+    "        \n",
+    "        return output, state\n",
+    "    \n",
+    "    def initialize_hidden_state(self):\n",
+    "        return tf.zeros((self.batch_sz, self.enc_units))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 108,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "tBnvsrQ7OppM"
+   },
+   "outputs": [],
+   "source": [
+    "class Decoder(tf.keras.Model):\n",
+    "    def __init__(self, vocab_size, embedding_dim, dec_units, batch_sz):\n",
+    "        super(Decoder, self).__init__()\n",
+    "        self.batch_sz = batch_sz\n",
+    "        self.dec_units = dec_units\n",
+    "        self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)\n",
+    "        self.gru = gru(self.dec_units)\n",
+    "        self.fc = tf.keras.layers.Dense(vocab_size)\n",
+    "                \n",
+    "    def call(self, x, hidden, enc_output):\n",
+    "        \n",
+    "        x = self.embedding(x)\n",
+    "        output, state = self.gru(x, initial_state = hidden)\n",
+    "        \n",
+    "        # output shape == (batch_size * 1, hidden_size)\n",
+    "        output = tf.reshape(output, (-1, output.shape[2]))\n",
+    "        \n",
+    "        # output shape == (batch_size * 1, vocab)\n",
+    "        x = self.fc(output)\n",
+    "        \n",
+    "        return x, state\n",
+    "        \n",
+    "    def initialize_hidden_state(self):\n",
+    "        return tf.zeros((self.batch_sz, self.dec_units))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 68,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "42275 32 32 2\n",
+      "8096 32 32 2\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(len(source2idx), embedding_dim, units, batch_size)\n",
+    "print(len(target2idx), embedding_dim, units, batch_size)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 109,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "yDZJii3JOppP"
+   },
+   "outputs": [],
+   "source": [
+    "encoder = Encoder(len(source2idx), embedding_dim, units, batch_size)\n",
+    "decoder = Decoder(len(target2idx), embedding_dim, units, batch_size)\n",
+    "\n",
+    "def loss_function(real, pred):\n",
+    "    mask = 1 - np.equal(real, 0)\n",
+    "    loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=real, logits=pred) * mask\n",
+    "    \n",
+    "#     print(\"real: {}\".format(real))\n",
+    "#     print(\"pred: {}\".format(pred))\n",
+    "#     print(\"mask: {}\".format(mask))\n",
+    "#     print(\"loss: {}\".format(tf.reduce_mean(loss_)))\n",
+    "    \n",
+    "    return tf.reduce_mean(loss_)\n",
+    "\n",
+    "# creating optimizer\n",
+    "optimizer = tf.train.AdamOptimizer()\n",
+    "\n",
+    "# creating check point (Object-based saving)\n",
+    "checkpoint_dir = './data_out/training_checkpoints'\n",
+    "\n",
+    "checkpoint_prefix = os.path.join(checkpoint_dir, 'ckpt')\n",
+    "checkpoint = tf.train.Checkpoint(optimizer=optimizer,\n",
+    "                                encoder=encoder,\n",
+    "                                decoder=decoder)\n",
+    "\n",
+    "# create writer for tensorboard\n",
+    "summary_writer = tf.contrib.summary.create_file_writer(logdir=checkpoint_dir)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'./data_out/training_checkpoints'"
+      ]
+     },
+     "execution_count": 37,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "checkpoint_dir"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 110,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 34
+    },
+    "colab_type": "code",
+    "id": "RFM0kUNAC9EA",
+    "outputId": "e1789eb3-8890-4128-98e0-9533e76f4162"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<tensorflow.python.training.tracking.util.CheckpointLoadStatus at 0x13c73a160>"
+      ]
+     },
+     "execution_count": 110,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "#최근 학습된 모델을 불러오고 이어서 EPOCHS로 돌아감\n",
+    "checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "best friends social trends and occasional murder.\n",
+      "Heathers \n"
+     ]
+    }
+   ],
+   "source": [
+    "print(df1.movie_tagline[39])\n",
+    "print(df1.movie_name[39])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 83,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "DUSgqhbhOppT"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'in order to get out of the snobby clique that is destroying her goodgirl reputation an intelligent teen teams up with a dark sociopath in a plot to kill the cool kids. a regular girl veronica tries to survive the social jungle of high school by sticking with the three most popular girls at school who are all called heather. as she meets a sociopath named jd her life spirals into a continuous cycle of hate unintentional murder and indifference as she exacts revenge on her enemies also known as her best friends. in ohio veronica sawyeris a teenager trying to participate in the clique at the westerburg high school of her schoolmates heathers duke mcnamara and chandler. she supports their nasty and shallow behavior just aiming to be a popular student. one day the newcomer in town jason dean starts dating veronica and he questions her relationship with the heathers. when they accidentally kill one of the heathers they forge a suicide note and even dead she becomes more popular among the students. other students become also tempted to commit suicide while veronica learns that jason dean is a psychopath. veronica mingles with heather i ii and iii to be as popular as them even though she hates them. she hates them enough to wish they were dead though she would never want to be their cause of death. when she starts dating jason dean however she finds herself involved in the murders of most of her enemies covered up as suicides. three high school girls named heather run an iron clad social clique at high school. one of their anointees veronica isnt sure she wants to fit into the clique particularly when she has to snub some of her old friends at the heathers behest. when veronica meets the new guy at school she starts pulling away from the clique while some of the more popular students start showing up dead with suicide notes. dear diary veronica sawyer is sick of being part of the heathers the most powerful clic of westerberg high making fun of martha dunnstock dumptruck the fat girl or doing some stupid polls is something shell never get used to. meanwhile she meets jd a cool rebel guy who wouldnt mind shooting a gun at school just to make his point. remington universitys party is where veronica has to go as a heather and theres where she gets her ultimatum as a heather from heather chandler the head of the heathers. so veronica and her lover jd accidentally kill heather chandler and manage to cover it up by making a suicide note. will this be just the beginning of the assasinationturnedsuicide serie of westerberg high which nor the fbi the cia or the pta would be able to stop or will veronica be able to pull herself together and stop her psychotic lover from killing absolutely everyone at school'"
+      ]
+     },
+     "execution_count": 83,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "#sentence = 'I feel hungry'\n",
+    "sentence = df1.movie_summary[39]\n",
+    "sentence = sentence.replace(\"\\n\", \" \")\n",
+    "sentence"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 111,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 90
+    },
+    "colab_type": "code",
+    "id": "I0FlJcpacNky",
+    "outputId": "95890cb8-3018-46d0-8a8d-8310803c2bda"
+   },
+   "outputs": [
+    {
+     "ename": "ValueError",
+     "evalue": "Tensor's shape (42274, 32) is not compatible with supplied shape (42721, 32)",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mValueError\u001b[0m                                Traceback (most recent call last)",
+      "\u001b[0;32m<ipython-input-111-94e16d28ae07>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[1;32m     35\u001b[0m     \u001b[0;32mreturn\u001b[0m \u001b[0mresult\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0msentence\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     36\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 37\u001b[0;31m \u001b[0mresult\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moutput_sentence\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mprediction\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0msentence\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mencoder\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mdecoder\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0msource2idx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mtarget2idx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0ms_max_len\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mt_max_len\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     38\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     39\u001b[0m \u001b[0mprint\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0msentence\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m<ipython-input-111-94e16d28ae07>\u001b[0m in \u001b[0;36mprediction\u001b[0;34m(sentence, encoder, decoder, inp_lang, targ_lang, max_length_inp, max_length_targ)\u001b[0m\n\u001b[1;32m     13\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     14\u001b[0m     \u001b[0mhidden\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;34m[\u001b[0m\u001b[0mtf\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mzeros\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;36m1\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0munits\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 15\u001b[0;31m     \u001b[0menc_out\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0menc_hidden\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mencoder\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mhidden\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     16\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     17\u001b[0m     \u001b[0mdec_hidden\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0menc_hidden\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36m__call__\u001b[0;34m(self, inputs, *args, **kwargs)\u001b[0m\n\u001b[1;32m    896\u001b[0m           with base_layer_utils.autocast_context_manager(\n\u001b[1;32m    897\u001b[0m               self._compute_dtype):\n\u001b[0;32m--> 898\u001b[0;31m             \u001b[0moutputs\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcall\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mcast_inputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    899\u001b[0m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_handle_activity_regularization\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moutputs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    900\u001b[0m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_set_mask_metadata\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moutputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0minput_masks\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m<ipython-input-107-0952e9941b78>\u001b[0m in \u001b[0;36mcall\u001b[0;34m(self, x, hidden)\u001b[0m\n\u001b[1;32m      8\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      9\u001b[0m     \u001b[0;32mdef\u001b[0m \u001b[0mcall\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mhidden\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 10\u001b[0;31m         \u001b[0mx\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0membedding\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mx\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     11\u001b[0m         \u001b[0moutput\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mstate\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mgru\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0minitial_state\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mhidden\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     12\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36m__call__\u001b[0;34m(self, inputs, *args, **kwargs)\u001b[0m\n\u001b[1;32m    892\u001b[0m         \u001b[0;31m# Eager execution on data tensors.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    893\u001b[0m         \u001b[0;32mwith\u001b[0m \u001b[0mbackend\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mname_scope\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_name_scope\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 894\u001b[0;31m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_maybe_build\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    895\u001b[0m           \u001b[0mcast_inputs\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_maybe_cast_inputs\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    896\u001b[0m           with base_layer_utils.autocast_context_manager(\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36m_maybe_build\u001b[0;34m(self, inputs)\u001b[0m\n\u001b[1;32m   2144\u001b[0m         \u001b[0;31m# operations.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   2145\u001b[0m         \u001b[0;32mwith\u001b[0m \u001b[0mtf_utils\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mmaybe_init_scope\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m-> 2146\u001b[0;31m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mbuild\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minput_shapes\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m   2147\u001b[0m       \u001b[0;31m# We must set self.built since user defined build functions are not\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   2148\u001b[0m       \u001b[0;31m# constrained to set self.built.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/utils/tf_utils.py\u001b[0m in \u001b[0;36mwrapper\u001b[0;34m(instance, input_shape)\u001b[0m\n\u001b[1;32m    304\u001b[0m     \u001b[0;32mif\u001b[0m \u001b[0minput_shape\u001b[0m \u001b[0;32mis\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    305\u001b[0m       \u001b[0minput_shape\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mconvert_shapes\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minput_shape\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mto_tuples\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mTrue\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 306\u001b[0;31m     \u001b[0moutput_shape\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mfn\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minstance\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0minput_shape\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    307\u001b[0m     \u001b[0;31m# Return shapes from `fn` as TensorShapes.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    308\u001b[0m     \u001b[0;32mif\u001b[0m \u001b[0moutput_shape\u001b[0m \u001b[0;32mis\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/layers/embeddings.py\u001b[0m in \u001b[0;36mbuild\u001b[0;34m(self, input_shape)\u001b[0m\n\u001b[1;32m    144\u001b[0m           \u001b[0mname\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;34m'embeddings'\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    145\u001b[0m           \u001b[0mregularizer\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0membeddings_regularizer\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 146\u001b[0;31m           constraint=self.embeddings_constraint)\n\u001b[0m\u001b[1;32m    147\u001b[0m     \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mbuilt\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;32mTrue\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    148\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36madd_weight\u001b[0;34m(self, name, shape, dtype, initializer, regularizer, trainable, constraint, partitioner, use_resource, synchronization, aggregation, **kwargs)\u001b[0m\n\u001b[1;32m    527\u001b[0m         \u001b[0mcollections\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mcollections_arg\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    528\u001b[0m         \u001b[0msynchronization\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0msynchronization\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 529\u001b[0;31m         aggregation=aggregation)\n\u001b[0m\u001b[1;32m    530\u001b[0m     \u001b[0mbackend\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mtrack_variable\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mvariable\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    531\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/training/tracking/base.py\u001b[0m in \u001b[0;36m_add_variable_with_custom_getter\u001b[0;34m(self, name, shape, dtype, initializer, getter, overwrite, **kwargs_for_getter)\u001b[0m\n\u001b[1;32m    691\u001b[0m         \u001b[0;31m# there is nothing to restore.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    692\u001b[0m         checkpoint_initializer = self._preload_simple_restoration(\n\u001b[0;32m--> 693\u001b[0;31m             name=name, shape=shape)\n\u001b[0m\u001b[1;32m    694\u001b[0m       \u001b[0;32melse\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    695\u001b[0m         \u001b[0mcheckpoint_initializer\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/training/tracking/base.py\u001b[0m in \u001b[0;36m_preload_simple_restoration\u001b[0;34m(self, name, shape)\u001b[0m\n\u001b[1;32m    758\u001b[0m         key=lambda restore: restore.checkpoint.restore_uid)\n\u001b[1;32m    759\u001b[0m     return CheckpointInitialValue(\n\u001b[0;32m--> 760\u001b[0;31m         checkpoint_position=checkpoint_position, shape=shape)\n\u001b[0m\u001b[1;32m    761\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    762\u001b[0m   \u001b[0;32mdef\u001b[0m \u001b[0m_track_trackable\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mtrackable\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mname\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moverwrite\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mFalse\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/training/tracking/base.py\u001b[0m in \u001b[0;36m__init__\u001b[0;34m(self, checkpoint_position, shape)\u001b[0m\n\u001b[1;32m     73\u001b[0m       \u001b[0;31m# We need to set the static shape information on the initializer if\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     74\u001b[0m       \u001b[0;31m# possible so we don't get a variable with an unknown shape.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 75\u001b[0;31m       \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mwrapped_value\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mset_shape\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mshape\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     76\u001b[0m     \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_checkpoint_position\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mcheckpoint_position\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     77\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/framework/ops.py\u001b[0m in \u001b[0;36mset_shape\u001b[0;34m(self, shape)\u001b[0m\n\u001b[1;32m   1072\u001b[0m       raise ValueError(\n\u001b[1;32m   1073\u001b[0m           \u001b[0;34m\"Tensor's shape %s is not compatible with supplied shape %s\"\u001b[0m \u001b[0;34m%\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m-> 1074\u001b[0;31m           (self.shape, shape))\n\u001b[0m\u001b[1;32m   1075\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   1076\u001b[0m   \u001b[0;31m# Methods not supported / implemented for Eager Tensors.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;31mValueError\u001b[0m: Tensor's shape (42274, 32) is not compatible with supplied shape (42721, 32)"
+     ]
+    }
+   ],
+   "source": [
+    "def prediction(sentence, encoder, decoder, inp_lang, targ_lang, max_length_inp, max_length_targ):\n",
+    "    inputs = []\n",
+    "    x = sentence.split(' ')\n",
+    "    for i in x:\n",
+    "        if not i in inp_lang.keys():\n",
+    "            pass\n",
+    "        else:\n",
+    "            inputs.append(inp_lang[i])\n",
+    "    inputs = tf.keras.preprocessing.sequence.pad_sequences([inputs], maxlen=max_length_inp, padding='post')\n",
+    "    inputs = tf.convert_to_tensor(inputs)\n",
+    "        \n",
+    "    result = ''\n",
+    "    \n",
+    "    hidden = [tf.zeros((1, units))]\n",
+    "    enc_out, enc_hidden = encoder(inputs, hidden)\n",
+    "        \n",
+    "    dec_hidden = enc_hidden\n",
+    "    dec_input = tf.expand_dims([targ_lang['<bos>']], 0)\n",
+    "   \n",
+    "    for t in range(max_length_targ):\n",
+    "        \n",
+    "\n",
+    "        predictions, dec_hidden = decoder(dec_input, dec_hidden, enc_out)\n",
+    "\n",
+    "        predicted_id = tf.argmax(predictions[0]).numpy()\n",
+    "\n",
+    "        result += idx2target[predicted_id] + ' '\n",
+    "        \n",
+    "        if idx2target.get(predicted_id) == '<eos>':\n",
+    "            return result, sentence\n",
+    "\n",
+    "        # the predicted ID is fed back into the model\n",
+    "        dec_input = tf.expand_dims([predicted_id], 0)    \n",
+    "            \n",
+    "    return result, sentence\n",
+    "    \n",
+    "result, output_sentence = prediction(sentence, encoder, decoder, source2idx, target2idx, s_max_len, t_max_len)\n",
+    "\n",
+    "print(sentence)\n",
+    "print(\"*\"*100)\n",
+    "print(result)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# print(df.movie_tagline[6])  #Troy 8문장 : k = 3\n",
+    "# print(df.movie_tagline[23]) #django 39문장 : k = 7"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#len(df.movie_summary[39].split('. '))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 85,
+   "metadata": {
+    "colab": {},
+    "colab_type": "code",
+    "id": "fJhT6ewfOppV",
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "ename": "ValueError",
+     "evalue": "Tensor's shape (42274, 32) is not compatible with supplied shape (42275, 32)",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mValueError\u001b[0m                                Traceback (most recent call last)",
+      "\u001b[0;32m<ipython-input-85-bb7696165424>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[1;32m     45\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     46\u001b[0m \u001b[0;31m# result, output_sentence = prediction(sentence, encoder, decoder, source2idx, target2idx, s_max_len, t_max_len)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 47\u001b[0;31m \u001b[0mtList\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mprediction\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0msentence\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mencoder\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mdecoder\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0msource2idx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mtarget2idx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0ms_max_len\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mt_max_len\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     48\u001b[0m \u001b[0;31m# print(sentence)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     49\u001b[0m \u001b[0;32mfrom\u001b[0m \u001b[0mpprint\u001b[0m \u001b[0;32mimport\u001b[0m \u001b[0mpprint\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m<ipython-input-85-bb7696165424>\u001b[0m in \u001b[0;36mprediction\u001b[0;34m(sentence, encoder, decoder, inp_lang, targ_lang, max_length_inp, max_length_targ)\u001b[0m\n\u001b[1;32m     14\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     15\u001b[0m     \u001b[0mhidden\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;34m[\u001b[0m\u001b[0mtf\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mzeros\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;36m1\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0munits\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 16\u001b[0;31m     \u001b[0menc_out\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0menc_hidden\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mencoder\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mhidden\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     17\u001b[0m     \u001b[0midx\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;36m0\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     18\u001b[0m     \u001b[0mdec_hidden\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0menc_hidden\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36m__call__\u001b[0;34m(self, inputs, *args, **kwargs)\u001b[0m\n\u001b[1;32m    896\u001b[0m           with base_layer_utils.autocast_context_manager(\n\u001b[1;32m    897\u001b[0m               self._compute_dtype):\n\u001b[0;32m--> 898\u001b[0;31m             \u001b[0moutputs\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcall\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mcast_inputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    899\u001b[0m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_handle_activity_regularization\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moutputs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    900\u001b[0m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_set_mask_metadata\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moutputs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0minput_masks\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m<ipython-input-66-0952e9941b78>\u001b[0m in \u001b[0;36mcall\u001b[0;34m(self, x, hidden)\u001b[0m\n\u001b[1;32m      8\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      9\u001b[0m     \u001b[0;32mdef\u001b[0m \u001b[0mcall\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mhidden\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 10\u001b[0;31m         \u001b[0mx\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0membedding\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mx\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     11\u001b[0m         \u001b[0moutput\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mstate\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mgru\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mx\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0minitial_state\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mhidden\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     12\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36m__call__\u001b[0;34m(self, inputs, *args, **kwargs)\u001b[0m\n\u001b[1;32m    892\u001b[0m         \u001b[0;31m# Eager execution on data tensors.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    893\u001b[0m         \u001b[0;32mwith\u001b[0m \u001b[0mbackend\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mname_scope\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_name_scope\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 894\u001b[0;31m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_maybe_build\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    895\u001b[0m           \u001b[0mcast_inputs\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_maybe_cast_inputs\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minputs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    896\u001b[0m           with base_layer_utils.autocast_context_manager(\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36m_maybe_build\u001b[0;34m(self, inputs)\u001b[0m\n\u001b[1;32m   2144\u001b[0m         \u001b[0;31m# operations.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   2145\u001b[0m         \u001b[0;32mwith\u001b[0m \u001b[0mtf_utils\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mmaybe_init_scope\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m-> 2146\u001b[0;31m           \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mbuild\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minput_shapes\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m   2147\u001b[0m       \u001b[0;31m# We must set self.built since user defined build functions are not\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   2148\u001b[0m       \u001b[0;31m# constrained to set self.built.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/utils/tf_utils.py\u001b[0m in \u001b[0;36mwrapper\u001b[0;34m(instance, input_shape)\u001b[0m\n\u001b[1;32m    304\u001b[0m     \u001b[0;32mif\u001b[0m \u001b[0minput_shape\u001b[0m \u001b[0;32mis\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    305\u001b[0m       \u001b[0minput_shape\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mconvert_shapes\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minput_shape\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mto_tuples\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mTrue\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 306\u001b[0;31m     \u001b[0moutput_shape\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mfn\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0minstance\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0minput_shape\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    307\u001b[0m     \u001b[0;31m# Return shapes from `fn` as TensorShapes.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    308\u001b[0m     \u001b[0;32mif\u001b[0m \u001b[0moutput_shape\u001b[0m \u001b[0;32mis\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/layers/embeddings.py\u001b[0m in \u001b[0;36mbuild\u001b[0;34m(self, input_shape)\u001b[0m\n\u001b[1;32m    144\u001b[0m           \u001b[0mname\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;34m'embeddings'\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    145\u001b[0m           \u001b[0mregularizer\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0membeddings_regularizer\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 146\u001b[0;31m           constraint=self.embeddings_constraint)\n\u001b[0m\u001b[1;32m    147\u001b[0m     \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mbuilt\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;32mTrue\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    148\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/keras/engine/base_layer.py\u001b[0m in \u001b[0;36madd_weight\u001b[0;34m(self, name, shape, dtype, initializer, regularizer, trainable, constraint, partitioner, use_resource, synchronization, aggregation, **kwargs)\u001b[0m\n\u001b[1;32m    527\u001b[0m         \u001b[0mcollections\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mcollections_arg\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    528\u001b[0m         \u001b[0msynchronization\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0msynchronization\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 529\u001b[0;31m         aggregation=aggregation)\n\u001b[0m\u001b[1;32m    530\u001b[0m     \u001b[0mbackend\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mtrack_variable\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mvariable\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    531\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/training/tracking/base.py\u001b[0m in \u001b[0;36m_add_variable_with_custom_getter\u001b[0;34m(self, name, shape, dtype, initializer, getter, overwrite, **kwargs_for_getter)\u001b[0m\n\u001b[1;32m    691\u001b[0m         \u001b[0;31m# there is nothing to restore.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    692\u001b[0m         checkpoint_initializer = self._preload_simple_restoration(\n\u001b[0;32m--> 693\u001b[0;31m             name=name, shape=shape)\n\u001b[0m\u001b[1;32m    694\u001b[0m       \u001b[0;32melse\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    695\u001b[0m         \u001b[0mcheckpoint_initializer\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/training/tracking/base.py\u001b[0m in \u001b[0;36m_preload_simple_restoration\u001b[0;34m(self, name, shape)\u001b[0m\n\u001b[1;32m    758\u001b[0m         key=lambda restore: restore.checkpoint.restore_uid)\n\u001b[1;32m    759\u001b[0m     return CheckpointInitialValue(\n\u001b[0;32m--> 760\u001b[0;31m         checkpoint_position=checkpoint_position, shape=shape)\n\u001b[0m\u001b[1;32m    761\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    762\u001b[0m   \u001b[0;32mdef\u001b[0m \u001b[0m_track_trackable\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mtrackable\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mname\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moverwrite\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mFalse\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/training/tracking/base.py\u001b[0m in \u001b[0;36m__init__\u001b[0;34m(self, checkpoint_position, shape)\u001b[0m\n\u001b[1;32m     73\u001b[0m       \u001b[0;31m# We need to set the static shape information on the initializer if\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     74\u001b[0m       \u001b[0;31m# possible so we don't get a variable with an unknown shape.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 75\u001b[0;31m       \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mwrapped_value\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mset_shape\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mshape\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     76\u001b[0m     \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_checkpoint_position\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mcheckpoint_position\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     77\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/tensorflow/lib/python3.7/site-packages/tensorflow_core/python/framework/ops.py\u001b[0m in \u001b[0;36mset_shape\u001b[0;34m(self, shape)\u001b[0m\n\u001b[1;32m   1072\u001b[0m       raise ValueError(\n\u001b[1;32m   1073\u001b[0m           \u001b[0;34m\"Tensor's shape %s is not compatible with supplied shape %s\"\u001b[0m \u001b[0;34m%\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m-> 1074\u001b[0;31m           (self.shape, shape))\n\u001b[0m\u001b[1;32m   1075\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m   1076\u001b[0m   \u001b[0;31m# Methods not supported / implemented for Eager Tensors.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;31mValueError\u001b[0m: Tensor's shape (42274, 32) is not compatible with supplied shape (42275, 32)"
+     ]
+    }
+   ],
+   "source": [
+    "def prediction(sentence, encoder, decoder, inp_lang, targ_lang, max_length_inp, max_length_targ):\n",
+    "    inputs = []\n",
+    "    x = sentence.split(' ')\n",
+    "    for i in x:\n",
+    "        if not i in inp_lang.keys():\n",
+    "            pass\n",
+    "        else:\n",
+    "            inputs.append(inp_lang[i])\n",
+    "    inputs = tf.keras.preprocessing.sequence.pad_sequences([inputs], maxlen=max_length_inp, padding='post')\n",
+    "    inputs = tf.convert_to_tensor(inputs)\n",
+    "        \n",
+    "    \n",
+    "    result = ''\n",
+    "    \n",
+    "    hidden = [tf.zeros((1, units))]\n",
+    "    enc_out, enc_hidden = encoder(inputs, hidden)\n",
+    "    idx = 0\n",
+    "    dec_hidden = enc_hidden\n",
+    "    dec_input = tf.expand_dims([targ_lang['<bos>']], 0)\n",
+    "    \n",
+    "    xList = []\n",
+    "    for t in range(max_length_targ):\n",
+    "        predictions, dec_hidden = decoder(dec_input, dec_hidden, enc_out)\n",
+    "      #print(\"*\"*100)\n",
+    "      #print(predictions)\n",
+    "      #print(\"*\"*100)\n",
+    "        changeVal = 2\n",
+    "        print(tf.argmax(predictions[0]))\n",
+    "        x = tf.nn.top_k(predictions[0], k=changeVal, sorted=True, name=None)\n",
+    "        for i in range(changeVal):\n",
+    "            predicted_id = x[1][i].numpy()\n",
+    "\n",
+    "\n",
+    "            result += idx2target[predicted_id] + ' '\n",
+    "\n",
+    "            if idx2target.get(predicted_id) == '<eos>':\n",
+    "#             return result, sentence\n",
+    "                xList.append([result, sentence])\n",
+    "                result=\"\"\n",
+    "\n",
+    "        # the predicted ID is fed back into the model\n",
+    "            dec_input = tf.expand_dims([predicted_id], 0)  \n",
+    "\n",
+    "    return xList\n",
+    "\n",
+    "# result, output_sentence = prediction(sentence, encoder, decoder, source2idx, target2idx, s_max_len, t_max_len)\n",
+    "tList=prediction(sentence, encoder, decoder, source2idx, target2idx, s_max_len, t_max_len)\n",
+    "# print(sentence)\n",
+    "from pprint import pprint\n",
+    "pprint(tList)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "accelerator": "GPU",
+  "colab": {
+   "collapsed_sections": [],
+   "name": "lab-12-5-seq-to-seq-keras-eager_1022수정.ipynb",
+   "provenance": [],
+   "toc_visible": true
+  },
+  "kernelspec": {
+   "display_name": "tensorflow",
+   "language": "python",
+   "name": "tensorflow"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
